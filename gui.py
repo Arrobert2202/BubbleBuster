@@ -31,8 +31,3 @@ class MainMenu:
     exit_button = ttk.Button(menu_frame, text='Exit', command=self.window.destroy)
     exit_button.configure(style='TButton')
     exit_button.pack(pady=10)
-
-if __name__ == "__main__":
-  window = tk.Tk()
-  MainMenu(window)
-  window.mainloop()
