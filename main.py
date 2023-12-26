@@ -1,7 +1,7 @@
 import tkinter as tk
-from gui import MainMenu
+from gui import BubbleBusterGUI
 
 if __name__ == "__main__":
   window = tk.Tk()
-  MainMenu(window)
+  BubbleBusterGUI(window)
   window.mainloop()
