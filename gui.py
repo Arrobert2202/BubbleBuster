@@ -49,8 +49,8 @@ class BubbleBusterGUI:
     menu_button = tk.Button(top_frame, text = 'Go to menu', foreground = '#7700a6', background='#defe47', command = self.menu_components)
     menu_button.place(relx=0.97, rely=0.25, anchor=tk.NE)
 
-    game_canvas = tk.Canvas(self.window,width=450, height=500, bg='#00b3fe', highlightbackground='#00b3fe')
-    game_canvas.pack(pady=30)
+    game_canvas = tk.Canvas(self.window,width=450, height=550, bg='#092067', highlightbackground='#fe00fe', highlightthickness=10)
+    game_canvas.pack(pady=10)
 
     score_label = tk.Label(self.window, text="Score: ",font=('Arial', 16, 'bold'), bg='#7700a6', fg='#defe47')
     score_label.pack()
