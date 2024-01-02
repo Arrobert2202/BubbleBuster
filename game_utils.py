@@ -9,12 +9,29 @@ MAXHEIGHT = 14
 MAXWIDTH = 12
 BUBBLESIZE = 38
 
+class HexagonalTable:
+  def __init__(self):
+    self.table = dict()
+    self.all_colors = set()
+  
+  def add(self, bubble):
+    self.table[(bubble.row, bubble.col)] = bubble
+    self.all_colors.add(bubble.color)
+  
+  def get_bubble(self, row, col):
+    return self.table.get((row, col), None)
+  
+  def get_colors(self):
+    return self.all_colors
+
+  def delete(self, row, col):
+    self.table.pop((row, col), None)
+
 class Game:
   def __init__(self, levels_data):
     self.window = tk.Tk()
-    self.table_rows = 0
     self.levels_data = levels_data
-    self.all_colors = set()
+    self.game_table = HexagonalTable()
     self.shooting = False
     self.configure_window()
     self.window.mainloop()
@@ -83,28 +100,21 @@ class Game:
     for widget in self.window.winfo_children():
       widget.destroy()
 
-  def initial_matrix(self):
-    bubble_matrix = [[None for _ in range(MAXWIDTH)] for _ in range(MAXHEIGHT)]
-    return bubble_matrix
-
   def populate_table(self, bubbles_data):
     for bubble in bubbles_data:
-      self.all_colors.add(bubble['color'])
-      self.game_table[bubble['row']][bubble['col']] = Bubble(bubble['color'], bubble['row'], bubble['col'])
-    print(self.all_colors)
-    return self.game_table
+      self.game_table.add(Bubble(bubble['color'], bubble['row'], bubble['col']))
 
   def create_level_table(self, current_level):
     level_data = self.levels_data['levels'][current_level - 1]
     bubbles_data = level_data['bubbles']
 
-    self.game_table = self.initial_matrix()
     self.populate_table(bubbles_data)
 
-    for row in range(len(self.game_table)):
-      for col in range(len(self.game_table[0])):
-        if self.game_table[row][col] is not None:
-          self.game_table[row][col].draw(self.game_canvas)
+    for row in range(MAXHEIGHT):
+      for col in range(MAXWIDTH):
+        bubble = self.game_table.get_bubble(row, col)
+        if bubble is not None:
+          bubble.draw(self.game_canvas)
 
     self.current_color = self.random_bubble()
     self.draw_current_bubble()
@@ -132,7 +142,7 @@ class Game:
     self.current_bubble.draw(self.game_canvas)
 
   def random_bubble(self):
-    return random.choice(list(self.all_colors))
+    return random.choice(list(self.game_table.get_colors()))
   
   def start_shooting(self, event):
     self.shooting = True
@@ -164,13 +174,27 @@ class Game:
       self.handle_collision()
   
   def handle_collision(self):
-    self.current_bubble.row,self.current_bubble.col = self.new_bubble_position()
+    self.current_bubble.row, self.current_bubble.col = self.new_bubble_position()
 
     self.current_bubble.destroy(self.game_canvas)
     self.current_bubble.draw(self.game_canvas)
-    self.game_table[self.current_bubble.row][self.current_bubble.col] = self.current_bubble
-    
+    self.game_table.add(self.current_bubble)
+    self.last_bubble = self.current_bubble
+
+    matches = list()
+    self.find_color_matches(matches)  
+    if len(matches) >= 3:
+      self.disolve_bubbles(matches)  
     self.update_next_bubbles()
+  
+  def find_color_matches(self, matches, visited=set()):
+    row, col, color = self.last_bubble.row, self.last_bubble.col, self.current_bubble.color
+    print()
+
+
+  def disolve_bubbles(self, matches):
+    print()
+    
 
   def new_bubble_position(self):
     x1, y1, x2, y2 = self.game_canvas.coords(self.current_bubble.get_bubble_id())
@@ -181,18 +205,18 @@ class Game:
     row = int(bubble_center_y / BUBBLESIZE)
     col = int(bubble_center_x / BUBBLESIZE)
 
-    if not self.game_table[row][col] is None:
+    if not self.game_table.get_bubble(row,col) is None:
       print("1")
       row += 1
     if row % 2 == 1 and col == 11:
-      if not self.game_table[row][col-1] is None:
+      if not self.game_table.get_bubble(row, col - 1) is None:
         print("2")
         row += 1
       else:
         print("3")
         col -= 1
-    if not self.game_table[row - 1][col] is None:
-      if row % 2 == 1 and self.game_table[row - 1][col].x > bubble_center_x:
+    if not self.game_table.get_bubble(row - 1, col) is None:
+      if row % 2 == 1 and self.game_table.get_bubble(row - 1, col).x > bubble_center_x:
         print("4")
         col -= 1
     return row, col
