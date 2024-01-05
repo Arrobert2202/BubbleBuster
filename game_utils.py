@@ -182,19 +182,78 @@ class Game:
     self.last_bubble = self.current_bubble
 
     matches = list()
-    self.find_color_matches(matches)  
+    print(matches)
+    self.find_color_matches(matches, self.current_bubble)  
     if len(matches) >= 3:
-      self.disolve_bubbles(matches)  
+      target_bubbles = self.get_dependent_bubbles(matches)
+      self.disolve_bubbles(matches + target_bubbles)  
     self.update_next_bubbles()
   
-  def find_color_matches(self, matches, visited=set()):
-    row, col, color = self.last_bubble.row, self.last_bubble.col, self.current_bubble.color
-    print()
+  def find_color_matches(self, matches, bubble, visited=None):
+    if visited is None:
+      visited = set()
+    row, col, color = bubble.row, bubble.col, bubble.color
+    
+    if bubble.get_bubble_id() in visited:
+      return
 
+    visited.add(bubble.get_bubble_id())
+    matches.append(bubble)
+    neighbor_bubbles = self.get_neighbor_bubbles(row, col)
+
+    for bubble in neighbor_bubbles:
+      # if bubble is not None and bubble.get_bubble_id() not in visited and bubble.color == color:
+      if bubble.color == color:
+        self.find_color_matches(matches,bubble, visited)
+
+  def get_dependent_bubbles(self, matches, safe_bubbles = None):
+    if safe_bubbles is None:
+      safe_bubbles = dict()
+
+    for col in range(12):
+      self.get_safe_neighbors(0, col, matches, safe_bubbles)
+    
+    target_bubbles = [bubble for bubble in self.game_table.table.values() if bubble not in safe_bubbles.values()]
+    return target_bubbles
+
+  def get_safe_neighbors(self, row, col, matches, safe_bubbles):
+    bubble = self.game_table.get_bubble(row, col)
+    if bubble not in matches and (row, col) not in safe_bubbles:
+      safe_bubbles[(row, col)] = bubble
+      neighbors = self.get_neighbor_bubbles(row, col)
+      for neighbor in neighbors:
+        self.get_safe_neighbors(neighbor.row, neighbor.col, matches, safe_bubbles)
+
+
+  def get_neighbor_bubbles(self, row, col):
+    neighbors = []
+
+    if not self.game_table.get_bubble(row, col - 1) is None:
+      neighbors.append(self.game_table.get_bubble(row, col - 1))
+    if not self.game_table.get_bubble(row, col + 1) is None:
+      neighbors.append(self.game_table.get_bubble(row, col + 1))
+    if not self.game_table.get_bubble(row - 1, col) is None:
+      neighbors.append(self.game_table.get_bubble(row - 1, col))
+    if not self.game_table.get_bubble(row + 1, col) is None:
+      neighbors.append(self.game_table.get_bubble(row + 1, col))
+    if row % 2 == 0:
+      if not self.game_table.get_bubble(row - 1, col - 1) is None:
+        neighbors.append(self.game_table.get_bubble(row - 1, col - 1))
+      if not self.game_table.get_bubble(row + 1, col - 1) is None:
+        neighbors.append(self.game_table.get_bubble(row + 1, col - 1))
+    else:
+      if not self.game_table.get_bubble(row - 1, col + 1) is None:
+        neighbors.append(self.game_table.get_bubble(row - 1, col + 1))
+      if not self.game_table.get_bubble(row + 1, col + 1) is None:
+        neighbors.append(self.game_table.get_bubble(row + 1, col + 1))
+    
+    return neighbors
 
   def disolve_bubbles(self, matches):
-    print()
-    
+    for bubble in matches:
+      print(f"{bubble.row}, {bubble.col}")
+      self.game_table.delete(bubble.row, bubble.col)
+      bubble.destroy(self.game_canvas)  
 
   def new_bubble_position(self):
     x1, y1, x2, y2 = self.game_canvas.coords(self.current_bubble.get_bubble_id())
