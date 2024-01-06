@@ -24,8 +24,14 @@ class HexagonalTable:
   def get_colors(self):
     return self.all_colors
 
+  def get_table(self):
+    return self.table
+
   def delete(self, row, col):
     self.table.pop((row, col), None)
+  
+  def clear(self):
+    self.table.clear()
 
 class Game:
   def __init__(self, levels_data):
@@ -33,6 +39,7 @@ class Game:
     self.levels_data = levels_data
     self.game_table = HexagonalTable()
     self.shooting = False
+    self.score = 0
     self.configure_window()
     self.window.mainloop()
 
@@ -84,7 +91,7 @@ class Game:
     self.next_bubble_canvas = tk.Canvas(top_frame, width = 20, height = 20, bg='#7700a6', highlightthickness=0)
     self.next_bubble_canvas.pack(side = tk.LEFT)
 
-    menu_button = tk.Button(top_frame, text='Go to menu', foreground='#7700a6', background='#defe47', command=lambda: self.menu_components())
+    menu_button = tk.Button(top_frame, text='Go to menu', foreground='#7700a6', background='#defe47', command=lambda: self.go_to_menu())
     menu_button.place(relx=0.97, rely=0.25, anchor=tk.NE)
 
     self.game_canvas = tk.Canvas(self.window, width=456, height=550, bg='#092067', highlightbackground='#fe00fe', highlightthickness=1)
@@ -121,13 +128,23 @@ class Game:
     self.next_bubble_color = self.random_bubble()
     self.draw_next_bubble()
     
+  def go_to_menu(self):
+    self.reset_game()
+    self.menu_components()
+
+  def reset_game(self):
+    self.shooting = False
+    self.score = 0
+    self.game_table.clear()
+
   def game_loop(self):
     if self.shooting:
-      print("Shooting")
       self.shoot_bubble()
-      print("Finished shooting")
-
+      # for key, value in self.game_table.table.items():
+      #   print(key)
       self.shooting = False
+      for key in self.game_table.get_table().keys():
+        print(key)
     self.window.after(10, self.game_loop)
 
   def get_next_bubble(self):
@@ -182,11 +199,10 @@ class Game:
     self.last_bubble = self.current_bubble
 
     matches = list()
-    print(matches)
     self.find_color_matches(matches, self.current_bubble)  
     if len(matches) >= 3:
-      target_bubbles = self.get_dependent_bubbles(matches)
-      self.disolve_bubbles(matches + target_bubbles)  
+      target_bubbles = self.get_target_bubbles(matches)
+      self.disolve_bubbles(target_bubbles)  
     self.update_next_bubbles()
   
   def find_color_matches(self, matches, bubble, visited=None):
@@ -206,13 +222,16 @@ class Game:
       if bubble.color == color:
         self.find_color_matches(matches,bubble, visited)
 
-  def get_dependent_bubbles(self, matches, safe_bubbles = None):
+  def get_target_bubbles(self, matches, safe_bubbles = None):
     if safe_bubbles is None:
       safe_bubbles = dict()
 
-    for col in range(12):
-      self.get_safe_neighbors(0, col, matches, safe_bubbles)
-    
+    for key in self.game_table.get_table().keys():
+      row,col = key
+      if row == 0:
+        self.get_safe_neighbors(0, col, matches, safe_bubbles)
+      elif row % 2 == 0 and (col == 0 or col == 11):
+        self.get_safe_neighbors(row, col, matches, safe_bubbles)
     target_bubbles = [bubble for bubble in self.game_table.table.values() if bubble not in safe_bubbles.values()]
     return target_bubbles
 
@@ -223,7 +242,6 @@ class Game:
       neighbors = self.get_neighbor_bubbles(row, col)
       for neighbor in neighbors:
         self.get_safe_neighbors(neighbor.row, neighbor.col, matches, safe_bubbles)
-
 
   def get_neighbor_bubbles(self, row, col):
     neighbors = []
@@ -251,7 +269,6 @@ class Game:
 
   def disolve_bubbles(self, matches):
     for bubble in matches:
-      print(f"{bubble.row}, {bubble.col}")
       self.game_table.delete(bubble.row, bubble.col)
       bubble.destroy(self.game_canvas)  
 
@@ -265,18 +282,14 @@ class Game:
     col = int(bubble_center_x / BUBBLESIZE)
 
     if not self.game_table.get_bubble(row,col) is None:
-      print("1")
       row += 1
     if row % 2 == 1 and col == 11:
       if not self.game_table.get_bubble(row, col - 1) is None:
-        print("2")
         row += 1
       else:
-        print("3")
         col -= 1
     if not self.game_table.get_bubble(row - 1, col) is None:
       if row % 2 == 1 and self.game_table.get_bubble(row - 1, col).x > bubble_center_x:
-        print("4")
         col -= 1
     return row, col
   
@@ -287,14 +300,15 @@ class Game:
 
   def check_bubble_collision(self):
     x1, y1, x2, y2 = self.game_canvas.coords(self.current_bubble.get_bubble_id())
-    collisions = self.game_canvas.find_overlapping(x1, y1, x2, y2)
-    collisions = [item for item in collisions if item != self.current_bubble.get_bubble_id()]
+    if y1 >= BUBBLESIZE/2:
+      collisions = self.game_canvas.find_overlapping(x1, y1, x2, y2)
+      collisions = [item for item in collisions if item != self.current_bubble.get_bubble_id()]
 
-    bubble_collisions = self.game_canvas.find_withtag("bubble")
-    bubble_collisions = [item for item in bubble_collisions if item in collisions]
+      bubble_collisions = self.game_canvas.find_withtag("bubble")
+      bubble_collisions = [item for item in bubble_collisions if item in collisions]
 
-    if len(bubble_collisions) == 0:
-      return False
+      if len(bubble_collisions) == 0:
+        return False
     return True
 
 class Bubble:
@@ -313,7 +327,7 @@ class Bubble:
   
   def destroy(self, game_canvas):
     game_canvas.delete(self.get_bubble_id())
-  
+
 def bubble_positions(row, col):
   x = BUBBLESIZE * col + BUBBLESIZE // 2
   if row % 2 == 1:
