@@ -9,7 +9,31 @@ MAXHEIGHT = 14
 MAXWIDTH = 12
 BUBBLESIZE = 38
 
-class HexagonalTable:
+class Bubble:
+  def __init__(self, color, row, col):
+    self.color = color
+    self.row = row
+    self.col = col
+
+  def draw(self, game_canvas, offset):
+    self.x, self.y = self.bubble_positions(self.row, self.col, offset)
+    bubble_radius = BUBBLESIZE // 2
+    self.bubble_id = game_canvas.create_oval(self.x - bubble_radius, self.y - bubble_radius, self.x + bubble_radius, self.y + bubble_radius, fill = self.color, tag="bubble")
+
+  def get_bubble_id(self):
+    return self.bubble_id
+  
+  def destroy(self, game_canvas):
+    game_canvas.delete(self.get_bubble_id())
+
+  def bubble_positions(self, row, col, offset):
+    x = BUBBLESIZE * col + BUBBLESIZE // 2
+    if (row + offset) % 2 == 1:
+      x += BUBBLESIZE // 2
+    y = BUBBLESIZE * row * 0.85 + BUBBLESIZE // 2
+    return x, y
+
+class Table:
   def __init__(self):
     self.table = dict()
     self.all_colors = set()
@@ -32,14 +56,26 @@ class HexagonalTable:
   
   def clear(self):
     self.table.clear()
+  
+  def print_table(self):
+    for row in range(MAXHEIGHT):
+      row_data = []
+      for col in range(MAXWIDTH):
+        bubble = self.get_bubble(row, col)
+        if bubble is not None:
+          row_data.append(f"({row}, {col}): {bubble.color}")
+      print(" | ".join(row_data))
 
 class Game:
   def __init__(self, levels_data):
     self.window = tk.Tk()
     self.levels_data = levels_data
-    self.game_table = HexagonalTable()
+    self.game_table = Table()
     self.shooting = False
+    self.last_shake = False
+    self.drop_counter = 0
     self.score = 0
+    self.first_row = 0
     self.configure_window()
     self.window.mainloop()
 
@@ -121,7 +157,7 @@ class Game:
       for col in range(MAXWIDTH):
         bubble = self.game_table.get_bubble(row, col)
         if bubble is not None:
-          bubble.draw(self.game_canvas)
+          bubble.draw(self.game_canvas, self.first_row)
 
     self.current_color = self.random_bubble()
     self.draw_current_bubble()
@@ -137,33 +173,76 @@ class Game:
     self.score = 0
     self.game_table.clear()
 
+  def start_shooting(self, event):
+    self.shooting = True
+    self.shooting_event = event
+
   def game_loop(self):
     if self.shooting:
       self.shoot_bubble()
-      # for key, value in self.game_table.table.items():
-      #   print(key)
       self.shooting = False
-      for key in self.game_table.get_table().keys():
-        print(key)
+      if self.drop_counter == 3:
+        self.shake_canvas_right(1)
+      elif self.drop_counter == 4:
+        self.stop_shaking()
+        self.shake_canvas_right(2)
+      
+    if self.drop_counter == 5:
+            self.drop_counter = 0
+            self.drop_bubbles()
+
     self.window.after(10, self.game_loop)
+
+  def stop_shaking(self):
+    self.last_shake = True
+
+  def shake_canvas_right(self, offset):
+    self.game_canvas.move("bubble", offset, 0)   
+    self.shake_id = self.game_canvas.after(50, lambda: self.shake_canvas_left(offset))
+  
+  def shake_canvas_left(self, offset):
+    self.game_canvas.move("bubble", offset * (-1), 0)
+    if self.last_shake:
+      self.last_shake = False
+    else:
+      self.shake_id1 = self.game_canvas.after(50, lambda: self.shake_canvas_right(offset))
+      
+  def drop_bubbles(self):
+    self.stop_shaking()
+    self.update_table()
+    self.block_space()
+    self.window.update()
+
+  def update_table(self):
+    bubbles = list(self.game_table.get_table().values())
+    for bubble in bubbles:
+      self.game_table.delete(bubble.row, bubble.col)
+
+    for bubble in bubbles:
+      self.game_canvas.move(bubble.get_bubble_id(), 0, BUBBLESIZE * 0.85)
+      bubble.row += 1
+      self.game_table.add(bubble)
+    
+    self.first_row += 1
+
+  def block_space(self):
+    if self.first_row > 0:
+      block_height = self.first_row * BUBBLESIZE * 0.85
+      self.game_canvas.create_rectangle(0, 0, WIDTH, block_height, fill = 'gray')
 
   def get_next_bubble(self):
     self.current_color =  self.next_bubble_color
     self.next_bubble_color = self.random_bubble()
-  
+
   def draw_next_bubble(self):
     self.next_bubble_canvas.create_oval(0, 0, 20, 20, fill = self.next_bubble_color)
 
   def draw_current_bubble(self):
     self.current_bubble = Bubble(self.current_color, 15, 5)
-    self.current_bubble.draw(self.game_canvas)
+    self.current_bubble.draw(self.game_canvas, self.first_row)
 
   def random_bubble(self):
     return random.choice(list(self.game_table.get_colors()))
-  
-  def start_shooting(self, event):
-    self.shooting = True
-    self.shooting_event = event
 
   def shoot_bubble(self):
     x1, y1, x2, y2 = self.game_canvas.coords(self.current_bubble.get_bubble_id())
@@ -173,19 +252,15 @@ class Game:
     bubble_direction_x = 5 * math.cos(angle)
     bubble_direction_y = 5 * math.sin(angle)
 
-    self.game_canvas.after(30, self.move_bubble, bubble_direction_x, bubble_direction_y)
+    self.game_canvas.after(10, self.move_bubble, bubble_direction_x, bubble_direction_y)
 
   def move_bubble(self, bubble_direction_x, bubble_direction_y):
     self.game_canvas.move(self.current_bubble.get_bubble_id(), bubble_direction_x, bubble_direction_y)
-    
-    x1, y1, x2, y2 = self.game_canvas.coords(self.current_bubble.get_bubble_id())
-    if x1 <= 0 or x2 >= WIDTH:
-      bubble_direction_x *= (-1)
-    if y1 <= 0 or y2 >= HEIGHT:
-      bubble_direction_y *= (-1)
-
     bubble_collision = self.check_bubble_collision()
     if bubble_collision is False:
+      x1, y1, x2, y2 = self.game_canvas.coords(self.current_bubble.get_bubble_id())
+      if x1 <= 0 or x2 >= WIDTH:
+        bubble_direction_x *= (-1)
       self.window.after(10, self.move_bubble, bubble_direction_x, bubble_direction_y)
     else:
       self.handle_collision()
@@ -194,9 +269,12 @@ class Game:
     self.current_bubble.row, self.current_bubble.col = self.new_bubble_position()
 
     self.current_bubble.destroy(self.game_canvas)
-    self.current_bubble.draw(self.game_canvas)
+    self.current_bubble.draw(self.game_canvas, self.first_row)
     self.game_table.add(self.current_bubble)
     self.last_bubble = self.current_bubble
+    self.drop_counter += 1
+
+    self.game_table.print_table()
 
     matches = list()
     self.find_color_matches(matches, self.current_bubble)  
@@ -204,6 +282,25 @@ class Game:
       target_bubbles = self.get_target_bubbles(matches)
       self.disolve_bubbles(target_bubbles)  
     self.update_next_bubbles()
+  
+  def check_bubble_collision(self):
+    x1, y1, x2, y2 = self.game_canvas.coords(self.current_bubble.get_bubble_id())
+    if y1 >= self.first_row * BUBBLESIZE + BUBBLESIZE/2:
+      collisions = self.game_canvas.find_overlapping(x1, y1, x2, y2)
+      collisions = [item for item in collisions if item != self.current_bubble.get_bubble_id()]
+
+      bubble_collisions = self.game_canvas.find_withtag("bubble")
+      bubble_collisions = [item for item in bubble_collisions if item in collisions]
+
+      if len(bubble_collisions) == 0:
+        return False
+      else:
+        for collision_id in bubble_collisions:
+          x1_c, y1_c, x2_c, y2_c = self.game_canvas.coords(collision_id)
+          if y2_c > y1 and x1_c < x2 and x2_c > x1:
+            return True
+        return False
+    return True
   
   def find_color_matches(self, matches, bubble, visited=None):
     if visited is None:
@@ -228,9 +325,9 @@ class Game:
 
     for key in self.game_table.get_table().keys():
       row,col = key
-      if row == 0:
-        self.get_safe_neighbors(0, col, matches, safe_bubbles)
-      elif row % 2 == 0 and (col == 0 or col == 11):
+      if row == self.first_row:
+        self.get_safe_neighbors(self.first_row, col, matches, safe_bubbles)
+      elif (row + self.first_row) % 2 == 0 and (col == 0 or col == 11):
         self.get_safe_neighbors(row, col, matches, safe_bubbles)
     target_bubbles = [bubble for bubble in self.game_table.table.values() if bubble not in safe_bubbles.values()]
     return target_bubbles
@@ -277,60 +374,23 @@ class Game:
 
     bubble_center_x = (x1 + x2) / 2
     bubble_center_y = (y1 + y2) / 2
-
     row = int(bubble_center_y / BUBBLESIZE)
     col = int(bubble_center_x / BUBBLESIZE)
 
-    if not self.game_table.get_bubble(row,col) is None:
+    if not self.is_valid_position(row, col):
       row += 1
-    if row % 2 == 1 and col == 11:
-      if not self.game_table.get_bubble(row, col - 1) is None:
+    
+    if (self.first_row + row) % 2 == 1 and col == 11:
+      col -= 1
+      if not self.is_valid_position(row, col):
         row += 1
-      else:
-        col -= 1
-    if not self.game_table.get_bubble(row - 1, col) is None:
-      if row % 2 == 1 and self.game_table.get_bubble(row - 1, col).x > bubble_center_x:
-        col -= 1
     return row, col
+  
+  def is_valid_position(self, row, col):
+    # Verificăm dacă poziția (row, col) este validă (fără suprapuneri)
+    return self.game_table.get_bubble(row, col) is None
   
   def update_next_bubbles(self):
     self.get_next_bubble()
     self.draw_next_bubble()
     self.draw_current_bubble()
-
-  def check_bubble_collision(self):
-    x1, y1, x2, y2 = self.game_canvas.coords(self.current_bubble.get_bubble_id())
-    if y1 >= BUBBLESIZE/2:
-      collisions = self.game_canvas.find_overlapping(x1, y1, x2, y2)
-      collisions = [item for item in collisions if item != self.current_bubble.get_bubble_id()]
-
-      bubble_collisions = self.game_canvas.find_withtag("bubble")
-      bubble_collisions = [item for item in bubble_collisions if item in collisions]
-
-      if len(bubble_collisions) == 0:
-        return False
-    return True
-
-class Bubble:
-  def __init__(self, color, row, col):
-    self.color = color
-    self.row = row
-    self.col = col
-
-  def draw(self, game_canvas):
-    self.x, self.y = bubble_positions(self.row, self.col)
-    bubble_radius = BUBBLESIZE // 2
-    self.bubble_id = game_canvas.create_oval(self.x - bubble_radius, self.y - bubble_radius, self.x + bubble_radius, self.y + bubble_radius, fill = self.color, tag="bubble")
-
-  def get_bubble_id(self):
-    return self.bubble_id
-  
-  def destroy(self, game_canvas):
-    game_canvas.delete(self.get_bubble_id())
-
-def bubble_positions(row, col):
-  x = BUBBLESIZE * col + BUBBLESIZE // 2
-  if row % 2 == 1:
-    x += BUBBLESIZE // 2
-  y = BUBBLESIZE * row * 0.86 + BUBBLESIZE // 2
-  return x, y 
