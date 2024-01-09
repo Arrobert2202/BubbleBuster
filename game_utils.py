@@ -71,9 +71,12 @@ class Game:
     self.window = tk.Tk()
     self.levels_data = levels_data
     self.game_table = Table()
+    self.color_score = dict()
     self.shooting = False
     self.last_shake = False
+    self.is_shaking = False
     self.drop_counter = 0
+    self.level = 1
     self.score = 0
     self.first_row = 0
     self.configure_window()
@@ -118,7 +121,9 @@ class Game:
     top_frame = tk.Frame(self.window, bg='#7700a6')
     top_frame.pack(fill=tk.X)
 
-    level_label = tk.Label(top_frame, text="Level 1", font=('Arial', 12, 'bold'), bg='#7700a6', fg='#defe47')
+    self.level_text = tk.StringVar()
+    self.level_text.set(f"Level {self.level}")
+    level_label = tk.Label(top_frame, textvariable=self.level_text, font=('Arial', 12, 'bold'), bg='#7700a6', fg='#defe47')
     level_label.pack(pady=5)
 
     self.next_bubble_label = tk.Label(top_frame, text="Next bubble: ", font=('Arial', 12, 'bold'), bg='#7700a6', fg='#defe47')
@@ -136,7 +141,9 @@ class Game:
     self.game_canvas.create_line(70, line_y, 386, line_y, width = 3, fill = '#7700a6')
     self.game_canvas.bind("<Button-1>", self.start_shooting)
 
-    score_label = tk.Label(self.window, text="Score: ", font=('Arial', 16, 'bold'), bg='#7700a6', fg='#defe47')
+    self.score_text = tk.StringVar()
+    self.score_text.set(f"Score: {self.score}")
+    score_label = tk.Label(self.window, textvariable=self.score_text, font=('Arial', 16, 'bold'), bg='#7700a6', fg='#defe47')
     score_label.pack()
 
   def destroy_widgets(self):
@@ -146,6 +153,29 @@ class Game:
   def populate_table(self, bubbles_data):
     for bubble in bubbles_data:
       self.game_table.add(Bubble(bubble['color'], bubble['row'], bubble['col']))
+    self.generate_color_score()
+
+  def generate_color_score(self):
+    colors = self.game_table.get_colors()
+    colors_count = dict()
+
+    for color in colors:
+      colors_count[color] = sum(1 for bubble in self.game_table.get_table().values() if bubble.color == color)
+    
+    sorted_colors = sorted(colors_count.keys(), key=lambda x: (isinstance(x, tuple), colors_count[x]))
+
+    if len(sorted_colors) > 4:
+      self.color_score[sorted_colors[0]] = 45
+      sorted_colors.remove(sorted_colors[0])
+      self.color_score[sorted_colors[1]] = 30
+      sorted_colors.remove(sorted_colors[1])
+    elif len(sorted_colors) > 2:
+      self.color_score[sorted_colors[0]] = 30
+      sorted_colors.remove(sorted_colors[0])
+    for index, color in enumerate(sorted_colors, start=2):
+      self.color_score[color] = 15
+    
+    print(self.color_score)
 
   def create_level_table(self, current_level):
     level_data = self.levels_data['levels'][current_level - 1]
@@ -178,23 +208,24 @@ class Game:
     self.shooting_event = event
 
   def game_loop(self):
+    if self.drop_counter == 3 and self.is_shaking == False:
+      self.is_shaking = True
+      self.shake_canvas_right(1)
+    elif self.drop_counter == 4 and self.is_shaking == False:
+      self.is_shaking = True
+      self.shake_canvas_right(2)
+    elif self.drop_counter == 5:
+      self.drop_counter = 0
+      self.drop_bubbles()
     if self.shooting:
-      self.shoot_bubble()
       self.shooting = False
-      if self.drop_counter == 3:
-        self.shake_canvas_right(1)
-      elif self.drop_counter == 4:
-        self.stop_shaking()
-        self.shake_canvas_right(2)
-      
-    if self.drop_counter == 5:
-            self.drop_counter = 0
-            self.drop_bubbles()
-
-    self.window.after(10, self.game_loop)
+      self.shoot_bubble()
+    else:
+      self.window.after(10, self.game_loop)
 
   def stop_shaking(self):
     self.last_shake = True
+    self.is_shaking = False
 
   def shake_canvas_right(self, offset):
     self.game_canvas.move("bubble", offset, 0)   
@@ -272,16 +303,20 @@ class Game:
     self.current_bubble.draw(self.game_canvas, self.first_row)
     self.game_table.add(self.current_bubble)
     self.last_bubble = self.current_bubble
-    self.drop_counter += 1
 
     self.game_table.print_table()
 
-    matches = list()
+    matches = set()
     self.find_color_matches(matches, self.current_bubble)  
     if len(matches) >= 3:
       target_bubbles = self.get_target_bubbles(matches)
+      self.update_score(matches, target_bubbles)
       self.disolve_bubbles(target_bubbles)  
     self.update_next_bubbles()
+    self.drop_counter += 1
+    if self.is_shaking:
+      self.stop_shaking()
+    self.window.after(10, self.game_loop)
   
   def check_bubble_collision(self):
     x1, y1, x2, y2 = self.game_canvas.coords(self.current_bubble.get_bubble_id())
@@ -311,11 +346,10 @@ class Game:
       return
 
     visited.add(bubble.get_bubble_id())
-    matches.append(bubble)
+    matches.add(bubble)
     neighbor_bubbles = self.get_neighbor_bubbles(row, col)
 
     for bubble in neighbor_bubbles:
-      # if bubble is not None and bubble.get_bubble_id() not in visited and bubble.color == color:
       if bubble.color == color:
         self.find_color_matches(matches,bubble, visited)
 
@@ -330,7 +364,7 @@ class Game:
       elif (row + self.first_row) % 2 == 0 and (col == 0 or col == 11):
         self.get_safe_neighbors(row, col, matches, safe_bubbles)
     target_bubbles = [bubble for bubble in self.game_table.table.values() if bubble not in safe_bubbles.values()]
-    return target_bubbles
+    return set(target_bubbles)
 
   def get_safe_neighbors(self, row, col, matches, safe_bubbles):
     bubble = self.game_table.get_bubble(row, col)
@@ -366,8 +400,8 @@ class Game:
 
   def disolve_bubbles(self, matches):
     for bubble in matches:
-      self.game_table.delete(bubble.row, bubble.col)
-      bubble.destroy(self.game_canvas)  
+      bubble.destroy(self.game_canvas)
+      self.game_table.delete(bubble.row, bubble.col)  
 
   def new_bubble_position(self):
     x1, y1, x2, y2 = self.game_canvas.coords(self.current_bubble.get_bubble_id())
@@ -377,20 +411,26 @@ class Game:
     row = int(bubble_center_y / BUBBLESIZE)
     col = int(bubble_center_x / BUBBLESIZE)
 
-    if not self.is_valid_position(row, col):
+    if not self.game_table.get_bubble(row, col) is None:
       row += 1
     
     if (self.first_row + row) % 2 == 1 and col == 11:
       col -= 1
-      if not self.is_valid_position(row, col):
+      if not self.game_table.get_bubble(row, col) is None:
         row += 1
     return row, col
-  
-  def is_valid_position(self, row, col):
-    # Verificăm dacă poziția (row, col) este validă (fără suprapuneri)
-    return self.game_table.get_bubble(row, col) is None
   
   def update_next_bubbles(self):
     self.get_next_bubble()
     self.draw_next_bubble()
     self.draw_current_bubble()
+
+  def update_score(self, matches, target_bubbles):
+    new_score = 15 * len(matches)
+    print(self.color_score)
+    for bubble in list(target_bubbles - matches):
+      new_score += 3 * self.color_score[bubble.color]
+    
+    self.score += new_score
+
+    self.score_text.set(f"Score: {self.score}")
