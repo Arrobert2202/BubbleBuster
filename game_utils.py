@@ -286,8 +286,8 @@ class Game:
     Afisarea mesajului in caz de terminare a jocului.
     :parama text: Mesajul corespunzator statusului jocului.
     """
-    self.message_label = tk.Label(self.window, text=text, font=('Arial', 30, 'bold'), bg='#7700a6', fg='#defe47')
-    self.message_label.pack(fill='both', expand=True)
+    self.message_label = tk.Label(self.window, text=text, font=('Arial', 30, 'bold'), bg='#7700a6', fg='#defe47', width=100, height = 20)
+    self.message_label.place(relx = 0.5, rely = 0.5, anchor=tk.CENTER)
 
   def stop_shaking(self):
     """
@@ -344,9 +344,7 @@ class Game:
     """
     Functie de declansare a tragerii bulei curente.
     """
-    x1, y1, x2, y2 = self.game_canvas.coords(self.current_bubble.get_bubble_id())
-    bubble_center_x = (x1 + x2) / 2
-    bubble_center_y = (y1 + y2) / 2
+    bubble_center_x, bubble_center_y = self.calculate_center(self.current_bubble)
     angle = math.atan2(self.shooting_event.y - bubble_center_y, self.shooting_event.x - bubble_center_x)
     bubble_direction_x = 10 * math.cos(angle)
     bubble_direction_y = 10 * math.sin(angle)
@@ -360,8 +358,21 @@ class Game:
     :param bubble_direction_y:  Directia bulei pe axa Y.
     """
     self.game_canvas.move(self.current_bubble.get_bubble_id(), bubble_direction_x, bubble_direction_y)
-    if self.check_collision() is False:
-      x1, y1, x2, y2 = self.game_canvas.coords(self.current_bubble.get_bubble_id())
+    bubble_center_x, bubble_center_y = self.calculate_center(self.current_bubble)
+    self.collision_bubble = None
+    for row in self.game_table:
+      for bubble in row:
+        if bubble is None:  continue
+        
+        other_center_x, other_center_y = self.calculate_center(bubble)
+        if math.sqrt((other_center_x - bubble_center_x)**2  + (other_center_y - bubble_center_y)**2) < BUBBLESIZE:
+          self.collision_bubble = bubble
+          print(f"{self.collision_bubble}")
+    
+    x1, y1, x2, y2 = self.game_canvas.coords(self.current_bubble.get_bubble_id())
+    if self.collision_bubble is None and y1 <= BUBBLESIZE * self.first_row * 0.85 + BUBBLESIZE / 2:
+      self.handle_collision()
+    elif self.collision_bubble is None:
       if x1 <= 0 or x2 >= WIDTH:
         bubble_direction_x *= (-1)
       self.window.after(10, self.move_bubble, bubble_direction_x, bubble_direction_y)
@@ -392,20 +403,6 @@ class Game:
     if self.is_shaking:
       self.stop_shaking()
     self.loop_id = self.window.after(50, self.game_loop)
-  
-  def check_collision(self):
-    """
-    Verificarea in caz de coliziune cu o bula sau peretele superior al canvasului.
-    """
-    x1, y1, x2, y2 = self.game_canvas.coords(self.current_bubble.get_bubble_id())
-    if y1 >= self.first_row * BUBBLESIZE * 0.85 + BUBBLESIZE/2:
-      collisions = self.game_canvas.find_overlapping(x1, y1, x2, y2)
-      collisions = [item for item in collisions if item != self.current_bubble.get_bubble_id()]
-      bubbles = self.game_canvas.find_withtag("bubble")
-      self.bubble_collisions = [item for item in bubbles if item in collisions]
-      if len(self.bubble_collisions) == 0:
-        return False
-    return True
   
   def find_color_matches(self, matches, bubble, visited=None):
     """
@@ -499,13 +496,9 @@ class Game:
     """
     Calcularea randului si coloanei din tabla de joc a bulei care a fost trase.
     """
-    bubble_coords = self.game_canvas.coords(self.current_bubble.get_bubble_id())
-    bubble_center_x = (bubble_coords[0] + bubble_coords[2]) / 2
-    bubble_center_y = (bubble_coords[1] + bubble_coords[3]) / 2
-    if not len(self.bubble_collisions) == 0:
-      object_coords = self.game_canvas.coords(self.bubble_collisions[0])
-      object_center_x = (object_coords[0] + object_coords[2]) / 2
-      object_center_y = (object_coords[1] + object_coords[3]) / 2
+    bubble_center_x, bubble_center_y = self.calculate_center(self.current_bubble)
+    if self.collision_bubble is not None:
+      object_center_x, object_center_y = self.calculate_center(self.collision_bubble)
       row = int(object_center_y / (BUBBLESIZE * 0.85))
       col = int(object_center_x / BUBBLESIZE)
       print(f"initial pos: {row}, {col}")
@@ -556,6 +549,16 @@ class Game:
     self.score += new_score
     self.score_text.set(f"Score: {self.score}")
 
+  def calculate_center(self, bubble):
+    """
+    Functie de calculare a centrului bulei date ca parametru.
+    :param bubble: Bula pentru care calculam coordonatele centrului.
+    """
+    bubble_coords = self.game_canvas.coords(bubble.get_bubble_id())
+    bubble_center_x = (bubble_coords[0] + bubble_coords[2]) / 2
+    bubble_center_y = (bubble_coords[1] + bubble_coords[3]) / 2
+    return bubble_center_x, bubble_center_y
+  
 def initial_matrix():
   """
   Initializarea matricii ce reprezinta tabela cu valori None.
