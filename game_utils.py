@@ -62,7 +62,14 @@ class Bubble:
     return x, y
 
 class Game:
+  """
+  Clasa pentru jocul BubbleBuster
+  """
   def __init__(self, window):
+    """
+    Initializarea unui obiect de tip Game.
+    :param window: Fereastra in care va avea loc jocul.
+    """
     self.window = window
     self.game_table = initial_matrix()
     self.all_colors = set()
@@ -75,16 +82,14 @@ class Game:
     self.first_row = 0
     self.loop_id = None
     self.game_over = False
-    self.configure_window()
-
-  def configure_window(self):
-    self.window.title("BubbleBuster")
-    self.window.geometry("600x700+500+50")
-    self.window.configure(bg='#7700a6')
     self.menu_components()
 
   def menu_components(self):
-    self.destroy_widgets()
+    """
+    Creara paginii de meniu.
+    """
+    for widget in self.window.winfo_children():
+      widget.destroy()
     title_label = tk.Label(self.window, text="BubbleBuster", font=('Arial', 25), bg='#7700a6', fg='#defe47')
     title_label.pack(pady=(200,50))
 
@@ -95,18 +100,24 @@ class Game:
     style.theme_use('alt')
     style.configure('TButton', font=('Arial', 16, 'bold'), width=20, padding=5, foreground='#7700a6', background='#defe47')
     
-    play_button = ttk.Button(menu_frame, text='Play', style='TButton', command=lambda: self.play_game(current_level=1))
+    play_button = ttk.Button(menu_frame, text='Play', style='TButton', command=lambda: self.play_game())
     play_button.pack(pady=20)
 
     exit_button = ttk.Button(menu_frame, text='Exit', style='TButton', command=self.window.destroy)
     exit_button.pack(pady=10)
 
-  def play_game(self, current_level):
+  def play_game(self):
+    """
+    Crearea unui nou joc, apasand pe butonul 'Play' din meniu.
+    """
     self.game_gui()
     self.create_random_table()
     self.game_loop()
 
   def create_random_table(self):
+    """
+    Crearea unei table hexagonale de joc random.
+    """
     self.all_colors = {"#08deea", "#c4ffff", "#fd8090", "#1261d1"}
     self.game_table = initial_matrix()
 
@@ -120,13 +131,16 @@ class Game:
 
     self.generate_color_score()
     self.draw_table()
-
-    self.current_color = self.random_bubble()
-    self.draw_current_bubble()
-    self.next_bubble_color = self.random_bubble()
-    self.draw_next_bubble()
+    self.current_color = random.choice(list(self.all_colors))
+    self.current_bubble = Bubble(15, 5, self.current_color)
+    self.current_bubble.draw(self.game_canvas, self.first_row)
+    self.next_bubble_color = random.choice(list(self.all_colors))
+    self.next_bubble_canvas.create_oval(0, 0, 20, 20, fill = self.next_bubble_color)
 
   def draw_table(self):
+    """
+    Desenarea tablei de joc.
+    """
     for row in range(MAXHEIGHT):
       for col in range(MAXWIDTH):
         bubble = self.game_table[row][col]
@@ -134,7 +148,11 @@ class Game:
           bubble.draw(self.game_canvas, self.first_row)
   
   def game_gui(self):
-    self.destroy_widgets()
+    """
+    Crearea interfetei de joc.
+    """
+    for widget in self.window.winfo_children():
+      widget.destroy()
 
     top_frame = tk.Frame(self.window, bg='#7700a6')
     top_frame.pack(fill=tk.X)
@@ -159,11 +177,10 @@ class Game:
     score_label = tk.Label(self.window, textvariable=self.score_text, font=('Arial', 16, 'bold'), bg='#7700a6', fg='#defe47')
     score_label.pack()
 
-  def destroy_widgets(self):
-    for widget in self.window.winfo_children():
-      widget.destroy()
-
   def generate_color_score(self):
+    """
+    Generarea scorului bulelor, in functie de numarul de culori.
+    """
     colors_count = dict()
     for color in self.all_colors:
       colors_count[color] = sum(1 for row in self.game_table for bubble in row if not bubble is None and bubble.color == color)
@@ -181,10 +198,16 @@ class Game:
       self.color_score[color] = 15
     
   def go_to_menu(self):
+    """
+    Trimiterea jucatorului catre meniul principal si resetarea jocului.
+    """
     self.reset_game()
     self.menu_components()
 
   def reset_game(self):
+    """
+    Resetarea statutului din joc si a tuturor variabilelor.
+    """
     self.window.after_cancel(self.loop_id)
     self.shooting = False
     self.score = 0
@@ -202,15 +225,21 @@ class Game:
         widget.pack_forget()
 
   def start_shooting(self, event):
+    """
+    Functie apelata atunci cand se apasa click pentru a trage o bula.
+    :param event: Event-ul pentru click/Locul unde s-a apasat click.
+    """
     self.shooting = True
     self.shooting_event = event
 
   def game_loop(self):
+    """
+    Functie ce reprezinta o bucla a jocului.
+    """
     if self.game_over:
       return
     
     self.check_game_status()
-
     if self.shooting:
       self.shooting = False
       self.shoot_bubble()
@@ -232,6 +261,11 @@ class Game:
       self.drop_bubbles()
 
   def check_game_status(self):
+    """
+    Verificarea statutului jocului si terminarea acestuia in caz de win/lose.
+    """
+    if self.game_over:
+      return
     counter = 0
     for row in self.game_table:
       for bubble in row:
@@ -245,20 +279,36 @@ class Game:
         if not self.game_table[14][col] is None:
           self.show_message("lose")
           self.game_over = True
+          break
 
   def show_message(self, text):
+    """
+    Afisarea mesajului in caz de terminare a jocului.
+    :parama text: Mesajul corespunzator statusului jocului.
+    """
     self.message_label = tk.Label(self.window, text=text, font=('Arial', 30, 'bold'), bg='#7700a6', fg='#defe47')
     self.message_label.pack(fill='both', expand=True)
 
   def stop_shaking(self):
+    """
+    Oprirea starii de shake care anunta caderea cu un nivel a bulelor.
+    """
     self.last_shake = True
     self.is_shaking = False
 
   def shake_canvas_right(self, offset):
+    """
+    Mutarea in dreapta a bulelor(pentru efectul de shake).
+    :param offset: Valoarea cu care sa se mute bulele la dreapta.
+    """
     self.game_canvas.move("bubble", offset, 0)   
     self.shake_id = self.game_canvas.after(50, lambda: self.shake_canvas_left(offset))
   
   def shake_canvas_left(self, offset):
+    """
+    Mutarea in stanga a bulelor(pentru efectul de shake).
+    :param offset: Valoarea cu care sa se mute bulele la stanga.
+    """
     self.game_canvas.move("bubble", offset * (-1), 0)
     if self.last_shake:
       self.last_shake = False
@@ -266,13 +316,21 @@ class Game:
       self.shake_id1 = self.game_canvas.after(50, lambda: self.shake_canvas_right(offset))
       
   def drop_bubbles(self):
+    """
+    Scaderea cu un rand a intregii tabele, pentru a ingreuna jocul.
+    """
     self.first_row += 1
     self.stop_shaking()
     self.update_table()
-    self.block_space()
+    if self.first_row > 0:
+      block_height = self.first_row * BUBBLESIZE * 0.85
+      self.game_canvas.create_rectangle(0, 0, WIDTH, block_height, fill = 'gray')
     self.window.update()
 
   def update_table(self):
+    """
+    Actualizarea tabelei curente, astfel incat matricea sa mute cu un rand in jos bulele.
+    """
     bubbles = [bubble for row in self.game_table for bubble in row if bubble is not None]
     for bubble in bubbles:
       self.game_table[bubble.row][bubble.col] = None
@@ -282,47 +340,41 @@ class Game:
       self.game_table[bubble.row][bubble.col] = bubble
       self.game_canvas.move(bubble.get_bubble_id(), 0, BUBBLESIZE * 0.85)
 
-  def block_space(self):
-    if self.first_row > 0:
-      block_height = self.first_row * BUBBLESIZE * 0.85
-      self.game_canvas.create_rectangle(0, 0, WIDTH, block_height, fill = 'gray')
-
-  def get_next_bubble(self):
-    self.current_color =  self.next_bubble_color
-    self.next_bubble_color = self.random_bubble()
-
-  def draw_next_bubble(self):
-    self.next_bubble_canvas.create_oval(0, 0, 20, 20, fill = self.next_bubble_color)
-
-  def draw_current_bubble(self):
-    self.current_bubble = Bubble(15, 5, self.current_color)
-    self.current_bubble.draw(self.game_canvas, self.first_row)
-
-  def random_bubble(self):
-    return random.choice(list(self.all_colors))
-
   def shoot_bubble(self):
+    """
+    Functie de declansare a tragerii bulei curente.
+    """
     x1, y1, x2, y2 = self.game_canvas.coords(self.current_bubble.get_bubble_id())
     bubble_center_x = (x1 + x2) / 2
     bubble_center_y = (y1 + y2) / 2
     angle = math.atan2(self.shooting_event.y - bubble_center_y, self.shooting_event.x - bubble_center_x)
-    bubble_direction_x = 5 * math.cos(angle)
-    bubble_direction_y = 5 * math.sin(angle)
+    bubble_direction_x = 10 * math.cos(angle)
+    bubble_direction_y = 10 * math.sin(angle)
 
     self.game_canvas.after(10, self.move_bubble, bubble_direction_x, bubble_direction_y)
 
   def move_bubble(self, bubble_direction_x, bubble_direction_y):
+    """
+    Mutarea bulei si verificarea daca aceasta s-a intersecat cu alte bule.
+    :param bubble_direction_x: Directia bulei pe axa X.
+    :param bubble_direction_y:  Directia bulei pe axa Y.
+    """
     self.game_canvas.move(self.current_bubble.get_bubble_id(), bubble_direction_x, bubble_direction_y)
-    if self.check_collision(bubble_direction_x, bubble_direction_y) is False:
+    if self.check_collision() is False:
       x1, y1, x2, y2 = self.game_canvas.coords(self.current_bubble.get_bubble_id())
       if x1 <= 0 or x2 >= WIDTH:
         bubble_direction_x *= (-1)
       self.window.after(10, self.move_bubble, bubble_direction_x, bubble_direction_y)
     else:
-      self.handle_collision(bubble_direction_x, bubble_direction_y)
+      self.handle_collision()
   
-  def handle_collision(self, bubble_direction_x, bubble_direction_y):
-    self.current_bubble.row, self.current_bubble.col = self.new_bubble_position(bubble_direction_x, bubble_direction_y)
+  def handle_collision(self):
+    """
+    Functie de handle in caz de coliziune.
+    :param bubble_direction_x: Directia bulei pe axa X.
+    :param bubble_direction_y:  Directia bulei pe axa Y.
+    """
+    self.current_bubble.row, self.current_bubble.col = self.new_bubble_position()
     self.current_bubble.destroy(self.game_canvas)
     self.current_bubble.draw(self.game_canvas, self.first_row)
     self.game_table[self.current_bubble.row][self.current_bubble.col] = self.current_bubble
@@ -333,89 +385,109 @@ class Game:
     if len(matches) >= 3:
       target_bubbles = self.get_target_bubbles(matches)
       self.update_score(matches, target_bubbles)
-      self.disolve_bubbles(target_bubbles)  
+      self.disolve_bubbles(target_bubbles)
+      print(self.all_colors)
     self.update_next_bubbles()
     self.drop_counter += 1
     if self.is_shaking:
       self.stop_shaking()
     self.loop_id = self.window.after(50, self.game_loop)
   
-  def check_collision(self, bubble_direction_x, bubble_direction_y):
+  def check_collision(self):
+    """
+    Verificarea in caz de coliziune cu o bula sau peretele superior al canvasului.
+    """
     x1, y1, x2, y2 = self.game_canvas.coords(self.current_bubble.get_bubble_id())
     if y1 >= self.first_row * BUBBLESIZE * 0.85 + BUBBLESIZE/2:
       collisions = self.game_canvas.find_overlapping(x1, y1, x2, y2)
       collisions = [item for item in collisions if item != self.current_bubble.get_bubble_id()]
-
       bubbles = self.game_canvas.find_withtag("bubble")
-      bubble_collisions = [item for item in bubbles if item in collisions]
-
-      if len(bubble_collisions) == 0:
-        return None
+      self.bubble_collisions = [item for item in bubbles if item in collisions]
+      if len(self.bubble_collisions) == 0:
+        return False
     return True
   
   def find_color_matches(self, matches, bubble, visited=None):
+    """
+    Functie de gasire a bulelor de aceeasi culoare cu care bula curenta a interactionat.
+    :param matches: Set in care pastram bulele de aceeasi culoare cu bula curenta, inclusiv pe ea.
+    :param bubble: Bula pe care o verificam, impreuna cu vecinii sai.
+    :param visited: Set in care punem id-urile bulelor, pentru a nu repeta procesul degeaba pentru aceeasi bula de doua sau mai multe ori.
+    """
     if visited is None:
       visited = set()
-    
     if bubble.get_bubble_id() in visited:
       return
-
     visited.add(bubble.get_bubble_id())
     matches.add(bubble)
-    neighbor_bubbles = self.get_neighbor_bubbles(bubble.row, bubble.col)
+    neighbor_bubbles = self.get_neighbor_bubbles(bubble)
 
     for neighbor in neighbor_bubbles:
       if neighbor.color == bubble.color:
         self.find_color_matches(matches, neighbor, visited)
 
   def get_target_bubbles(self, matches, safe_bubbles = None):
+    """
+    Determinarea bulelor ce trebuie eliminate pe langa cele de aceeasi culoare cu bula curenta.
+    :param matches: Set in care pastram bulele de aceeasi culoare cu bula curenta, inclusiv pe ea.
+    :param safe_bubbles: Dictionar in care pastram bulele ce nu trebuie eliminate.
+    """
     if safe_bubbles is None:
       safe_bubbles = dict()
-
     for row in self.game_table:
       for bubble in row:
         if bubble is not None:
-          if bubble.row == self.first_row:
-            self.get_safe_neighbors(self.first_row, bubble.col, matches, safe_bubbles)
-          elif (bubble.row + self.first_row) % 2 == 0 and (bubble.col == 0 or bubble.col == 11):
-            self.get_safe_neighbors(bubble.row, bubble.col, matches, safe_bubbles)
+          if (bubble.row == self.first_row) or ((bubble.row + self.first_row) % 2 == 0 and (bubble.col == 0 or bubble.col == 11)):
+            self.get_safe_neighbors(bubble, matches, safe_bubbles)
     target_bubbles = [bubble for row in self.game_table for bubble in row if bubble is not None and bubble not in safe_bubbles.values()]
     return set(target_bubbles)
 
-  def get_safe_neighbors(self, row, col, matches, safe_bubbles):
-    bubble = self.game_table[row][col]
-    if bubble not in matches and (row, col) not in safe_bubbles:
-      safe_bubbles[(row, col)] = bubble
-      neighbors = self.get_neighbor_bubbles(row, col)
+  def get_safe_neighbors(self, bubble, matches, safe_bubbles):
+    """
+    Functie recursiva de aflare a bulelor ce nu trebuie eliminate.
+    :param bubble: Bula pentru care cautam vecinii care nu trebuie eliminati.
+    :param matches:  Set in care pastram bulele de aceeasi culoare cu bula curenta, inclusiv pe ea.
+    :param safe_bubbles:  Dictionar in care pastram bulele ce nu trebuie eliminate.
+    """
+    if bubble not in matches and (bubble.row, bubble.col) not in safe_bubbles:
+      safe_bubbles[(bubble.row, bubble.col)] = bubble
+      neighbors = self.get_neighbor_bubbles(bubble)
       for neighbor in neighbors:
-        self.get_safe_neighbors(neighbor.row, neighbor.col, matches, safe_bubbles)
+        self.get_safe_neighbors(neighbor, matches, safe_bubbles)
 
-  def get_neighbor_bubbles(self, row, col):
+  def get_neighbor_bubbles(self, bubble):
+    """
+    Determinarea vecinilor unei bule.
+    :param bubble: Bula pentru care determinam vecinii.
+    """
     neighbors = []
-    
+    row, col = bubble.row, bubble.col
     if not col == 0 and not self.game_table[row][col - 1] is None:
       neighbors.append(self.game_table[row][col - 1])
     if not col == MAXWIDTH - 1 and not self.game_table[row][col + 1] is None:
       neighbors.append(self.game_table[row][col + 1])
     if not row == 0 and not self.game_table[row - 1][col] is None:
       neighbors.append(self.game_table[row - 1][col])
-    if not row == MAXHEIGHT and not self.game_table[row + 1][col] is None:
+    if row <= MAXHEIGHT and not self.game_table[row + 1][col] is None:
       neighbors.append(self.game_table[row + 1][col])
     if (row + self.first_row) % 2 == 0:
       if not row == 0 and not col == 0 and not self.game_table[row - 1][col - 1] is None:
         neighbors.append(self.game_table[row - 1][col - 1])
-      if not row == MAXHEIGHT and not col == 0 and not self.game_table[row + 1][col - 1] is None:
+      if row <= MAXHEIGHT and not col == 0 and not self.game_table[row + 1][col - 1] is None:
         neighbors.append(self.game_table[row + 1][col - 1])
     else:
       if not row == 0 and not col == MAXWIDTH - 1 and not self.game_table[row - 1][col + 1] is None:
         neighbors.append(self.game_table[row - 1][col + 1])
-      if not row == MAXHEIGHT and not col == MAXWIDTH - 1 and not self.game_table[row + 1][col + 1] is None:
+      if row <= MAXHEIGHT and not col == MAXWIDTH - 1 and not self.game_table[row + 1][col + 1] is None:
         neighbors.append(self.game_table[row + 1][col + 1])
-    
     return neighbors
 
-  def disolve_bubbles(self, matches):
-    for bubble in matches:
+  def disolve_bubbles(self, bubbles):
+    """
+    Stergerea din tabla de joc a bulelor.
+    :param bubbles: Lista cu bulele care se vor sterge din tabla de joc.
+    """
+    for bubble in bubbles:
       print(f"{bubble.row},{bubble.col}: {bubble.color}")
       bubble.destroy(self.game_canvas)
       self.game_table[bubble.row][bubble.col] = None
@@ -423,43 +495,70 @@ class Game:
       if self.next_bubble_color is not color and not any(bubble.color == color for row in self.game_table for bubble in row if bubble is not None):
         self.all_colors.remove(bubble.color)
 
-  def new_bubble_position(self, bubble_direction_x, bubble_direction_y):
-    x1, y1, x2, y2 = self.game_canvas.coords(self.current_bubble.get_bubble_id())
-    print(f"new pos: {x1}, {y1}, {x2}, {y2}")
-    bubble_center_x = (x1 + x2) / 2
-    bubble_center_y = (y1 + y2) / 2
-    col = int(bubble_center_x / BUBBLESIZE) + int(abs(bubble_direction_x)/5)
-    row = int(bubble_center_y / (BUBBLESIZE * 0.85)) + int(abs(bubble_direction_y)/5) 
-    # if (row + self.first_row) % 2 == 1:
-    #     col -= 1
-
-    print(f"{row}, {col}")
-    if self.game_table[row - 1][col] is None:
-      if self.game_table[row - 1][col - 1] is not None or self.game_table[row - 1][col + 1] is not None:
-        row -= 1
-    if col == 11 and (row + self.first_row) % 2 == 1:
-      if self.game_table[row][col - 1] is not None:
-        row += 1
+  def new_bubble_position(self):
+    """
+    Calcularea randului si coloanei din tabla de joc a bulei care a fost trase.
+    """
+    bubble_coords = self.game_canvas.coords(self.current_bubble.get_bubble_id())
+    bubble_center_x = (bubble_coords[0] + bubble_coords[2]) / 2
+    bubble_center_y = (bubble_coords[1] + bubble_coords[3]) / 2
+    if not len(self.bubble_collisions) == 0:
+      object_coords = self.game_canvas.coords(self.bubble_collisions[0])
+      object_center_x = (object_coords[0] + object_coords[2]) / 2
+      object_center_y = (object_coords[1] + object_coords[3]) / 2
+      row = int(object_center_y / (BUBBLESIZE * 0.85))
+      col = int(object_center_x / BUBBLESIZE)
+      print(f"initial pos: {row}, {col}")
+      if (self.first_row + row) % 2 == 1:
+        col -= 1 if object_center_x % BUBBLESIZE < BUBBLESIZE / 2 else 0
+      final_row, final_col = row, col
+      if (row + self.first_row) % 2 ==1:
+        directions = [(0, 1), (1, 0), (0, -1), (-1, 1), (-1, 0), (1, 1)]
       else:
-        col -= 1
+        directions = [(0, 1), (1, 0), (0, -1), (-1, -1), (-1, 0), (1, -1)]
+      min_distance = float('inf')
+      for direction in directions:
+        new_row, new_col = row + direction[0], col + direction[1]
+        if not((self.first_row + new_row) % 2 == 1 and new_col == 11):
+          if 0 <= new_row <= MAXHEIGHT and 0 <= new_col < MAXWIDTH and self.game_table[new_row][new_col] is None:
+            new_center_x = (new_col * BUBBLESIZE) + BUBBLESIZE / 2
+            new_center_y = (new_row * BUBBLESIZE * 0.85) + BUBBLESIZE / 2
+            distance_to_collided = math.sqrt((bubble_center_x - new_center_x)**2 + (bubble_center_y - new_center_y)**2)
+            if distance_to_collided < min_distance:
+              min_distance = distance_to_collided
+              final_row, final_col = new_row, new_col
+              print(f"pos: {final_row}, {final_col}")
+    else:
+      final_row = self.first_row
+      final_col = int(bubble_center_x / BUBBLESIZE)
+    print(f"adjusted pos: {final_row}, {final_col}")
+    return final_row, final_col
 
-    print(f"{row}, {col}")
-    return row, col
-  
   def update_next_bubbles(self):
-    self.get_next_bubble()
-    self.draw_next_bubble()
-    self.draw_current_bubble()
+    """
+    Actualizarea bulei curente si a celei care urmeaza.
+    """
+    self.current_color =  self.next_bubble_color
+    self.next_bubble_color = random.choice(list(self.all_colors))
+    self.next_bubble_canvas.create_oval(0, 0, 20, 20, fill = self.next_bubble_color)
+    self.current_bubble = Bubble(15, 5, self.current_color)
+    self.current_bubble.draw(self.game_canvas, self.first_row)
 
   def update_score(self, matches, target_bubbles):
+    """
+    Actualizarea scorului in functie de bulele ce au fost distruse.
+    :param matches: Bulele alaturi de care bula curenta a declansat distrugerea.
+    :param target_bubbles: Bulele care depindeau de cele ce au declansat distrugerea.
+    """
     new_score = 15 * len(matches)
     for bubble in list(target_bubbles - matches):
-      new_score += 3 * self.color_score[bubble.color]
-    
+      new_score += 3 * self.color_score[bubble.color]   
     self.score += new_score
-
     self.score_text.set(f"Score: {self.score}")
 
 def initial_matrix():
+  """
+  Initializarea matricii ce reprezinta tabela cu valori None.
+  """
   game_table = [[None for _ in range(MAXWIDTH)] for _ in range(MAXHEIGHT + 2)]
   return game_table
