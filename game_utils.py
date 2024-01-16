@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import ttk
 import random
 import math
+from collections import Counter
 
 WIDTH = 456
 HEIGHT = 550
@@ -30,7 +31,7 @@ class Bubble:
     :param game_canvas: Canvas-ul pe care desenam bulele.
     :param offset: Numarul de randuri cu care a coborat tabla de joc.
     """
-    self.x, self.y = self.bubble_positions(self.row, self.col, offset)
+    self.x, self.y = self.bubble_position(self.row, self.col, offset)
     bubble_radius = BUBBLESIZE // 2
     self.bubble_id = game_canvas.create_oval(self.x - bubble_radius, self.y - bubble_radius, self.x + bubble_radius, self.y + bubble_radius, fill = self.color, tag="bubble")
 
@@ -47,7 +48,7 @@ class Bubble:
     """
     game_canvas.delete(self.get_bubble_id())
 
-  def bubble_positions(self, row, col, offset):
+  def bubble_position(self, row, col, offset):
     """
     Calculeaza coordonatele X si Y ale bulei in canvas.
     :param row: Randul pe care se afla bula in tabela hexagonala.
@@ -144,7 +145,7 @@ class Game:
     for row in range(MAXHEIGHT):
       for col in range(MAXWIDTH):
         bubble = self.game_table[row][col]
-        if bubble is not None:
+        if bubble:
           bubble.draw(self.game_canvas, self.first_row)
   
   def game_gui(self):
@@ -181,19 +182,17 @@ class Game:
     """
     Generarea scorului bulelor, in functie de numarul de culori.
     """
-    colors_count = dict()
-    for color in self.all_colors:
-      colors_count[color] = sum(1 for row in self.game_table for bubble in row if not bubble is None and bubble.color == color)
-    sorted_colors = sorted(colors_count.keys(), key=lambda x: (isinstance(x, tuple), colors_count[x]))
+    colors_count = Counter(bubble.color for row in self.game_table for bubble in row if bubble)
+    sorted_colors = sorted(colors_count.keys(), key=lambda x: colors_count[x])
 
     if len(sorted_colors) > 4:
       self.color_score[sorted_colors[0]] = 45
-      sorted_colors.remove(sorted_colors[0])
-      self.color_score[sorted_colors[1]] = 30
-      sorted_colors.remove(sorted_colors[1])
+      sorted_colors.pop(0)
+      self.color_score[sorted_colors[0]] = 30
+      sorted_colors.pop(0)
     elif len(sorted_colors) > 2:
       self.color_score[sorted_colors[0]] = 30
-      sorted_colors.remove(sorted_colors[0])
+      sorted_colors.pop(0)
     for index, color in enumerate(sorted_colors, start=2):
       self.color_score[color] = 15
     
@@ -218,9 +217,9 @@ class Game:
     self.last_shake = False
     self.game_over = False
 
-    widgets_to_check = ['game_canvas', 'next_bubble_canvas', 'message_label']
-    for widget_name in widgets_to_check:
-      widget = getattr(self, widget_name, None)
+    widgets = ['game_canvas', 'next_bubble_canvas', 'message_label']
+    for widget in widgets:
+      widget = getattr(self, widget, None)
       if widget and widget.winfo_exists():
         widget.pack_forget()
 
@@ -239,26 +238,26 @@ class Game:
     if self.game_over:
       return
     
+    if self.drop_counter == 3 and not self.is_shaking:
+      self.is_shaking = True
+      self.shake_canvas_right(1)
+    elif self.drop_counter == 4 and not self.is_shaking:
+      self.is_shaking = True
+      self.shake_canvas_right(2)
+    elif self.drop_counter == 5 and not self.is_shaking:
+      self.drop_counter = 0
+      self.drop_bubbles()
+      
     self.check_game_status()
     if self.shooting:
       self.shooting = False
       self.shoot_bubble()
     else:
-      for item_id in self.game_canvas.find_withtag("bubble"):
-        bubble_id = int(item_id)
-        if bubble_id != self.current_bubble.get_bubble_id() and not any(bubble.get_bubble_id() == bubble_id for row in self.game_table for bubble in row if bubble is not None):
-          self.game_canvas.delete(item_id)
+      for id in self.game_canvas.find_withtag("bubble"):
+        bubble_id = int(id)
+        if bubble_id != self.current_bubble.get_bubble_id() and not any(bubble.get_bubble_id() == bubble_id for row in self.game_table for bubble in row if bubble):
+          self.game_canvas.delete(id)
       self.loop_id = self.window.after(10, self.game_loop)
-    
-    if self.drop_counter == 3 and self.is_shaking == False:
-      self.is_shaking = True
-      self.shake_canvas_right(1)
-    elif self.drop_counter == 4 and self.is_shaking == False:
-      self.is_shaking = True
-      self.shake_canvas_right(2)
-    elif self.drop_counter == 5 and self.is_shaking == False:
-      self.drop_counter = 0
-      self.drop_bubbles()
 
   def check_game_status(self):
     """
@@ -266,17 +265,13 @@ class Game:
     """
     if self.game_over:
       return
-    counter = 0
-    for row in self.game_table:
-      for bubble in row:
-        if bubble is not None:
-          counter += 1
+    counter = sum(1 for row in self.game_table for bubble in row if bubble)
     if counter == 0:
       self.show_message("win")
       self.game_over = True
     else:
       for col in range(MAXWIDTH):
-        if not self.game_table[14][col] is None:
+        if self.game_table[14][col]:
           self.show_message("lose")
           self.game_over = True
           break
@@ -286,7 +281,8 @@ class Game:
     Afisarea mesajului in caz de terminare a jocului.
     :parama text: Mesajul corespunzator statusului jocului.
     """
-    self.message_label = tk.Label(self.window, text=text, font=('Arial', 30, 'bold'), bg='#7700a6', fg='#defe47', width=100, height = 20)
+    self.stop_shaking()
+    self.message_label = tk.Label(self.window, text=text, font=('Arial', 30, 'bold'), bg='#7700a6', fg='#defe47', width=100, height = 2)
     self.message_label.place(relx = 0.5, rely = 0.5, anchor=tk.CENTER)
 
   def stop_shaking(self):
@@ -320,18 +316,16 @@ class Game:
     Scaderea cu un rand a intregii tabele, pentru a ingreuna jocul.
     """
     self.first_row += 1
-    self.stop_shaking()
     self.update_table()
     if self.first_row > 0:
-      block_height = self.first_row * BUBBLESIZE * 0.85
-      self.game_canvas.create_rectangle(0, 0, WIDTH, block_height, fill = 'gray')
+      self.game_canvas.create_rectangle(0, 0, WIDTH, self.first_row * BUBBLESIZE * 0.85, fill = 'gray')
     self.window.update()
 
   def update_table(self):
     """
     Actualizarea tabelei curente, astfel incat matricea sa mute cu un rand in jos bulele.
     """
-    bubbles = [bubble for row in self.game_table for bubble in row if bubble is not None]
+    bubbles = [bubble for row in self.game_table for bubble in row if bubble]
     for bubble in bubbles:
       self.game_table[bubble.row][bubble.col] = None
 
@@ -346,8 +340,8 @@ class Game:
     """
     bubble_center_x, bubble_center_y = self.calculate_center(self.current_bubble)
     angle = math.atan2(self.shooting_event.y - bubble_center_y, self.shooting_event.x - bubble_center_x)
-    bubble_direction_x = 10 * math.cos(angle)
-    bubble_direction_y = 10 * math.sin(angle)
+    bubble_direction_x = 8.5 * math.cos(angle)
+    bubble_direction_y = 8.5 * math.sin(angle)
 
     self.game_canvas.after(10, self.move_bubble, bubble_direction_x, bubble_direction_y)
 
@@ -367,7 +361,6 @@ class Game:
         other_center_x, other_center_y = self.calculate_center(bubble)
         if math.sqrt((other_center_x - bubble_center_x)**2  + (other_center_y - bubble_center_y)**2) < BUBBLESIZE:
           self.collision_bubble = bubble
-          print(f"{self.collision_bubble}")
     
     x1, y1, x2, y2 = self.game_canvas.coords(self.current_bubble.get_bubble_id())
     if self.collision_bubble is None and y1 <= BUBBLESIZE * self.first_row * 0.85 + BUBBLESIZE / 2:
@@ -389,7 +382,6 @@ class Game:
     self.current_bubble.destroy(self.game_canvas)
     self.current_bubble.draw(self.game_canvas, self.first_row)
     self.game_table[self.current_bubble.row][self.current_bubble.col] = self.current_bubble
-    self.last_bubble = self.current_bubble
 
     matches = set()
     self.find_color_matches(matches, self.current_bubble)  
@@ -397,7 +389,6 @@ class Game:
       target_bubbles = self.get_target_bubbles(matches)
       self.update_score(matches, target_bubbles)
       self.disolve_bubbles(target_bubbles)
-      print(self.all_colors)
     self.update_next_bubbles()
     self.drop_counter += 1
     if self.is_shaking:
@@ -433,10 +424,10 @@ class Game:
       safe_bubbles = dict()
     for row in self.game_table:
       for bubble in row:
-        if bubble is not None:
+        if bubble:
           if (bubble.row == self.first_row) or ((bubble.row + self.first_row) % 2 == 0 and (bubble.col == 0 or bubble.col == 11)):
             self.get_safe_neighbors(bubble, matches, safe_bubbles)
-    target_bubbles = [bubble for row in self.game_table for bubble in row if bubble is not None and bubble not in safe_bubbles.values()]
+    target_bubbles = [bubble for row in self.game_table for bubble in row if bubble and bubble not in safe_bubbles.values()]
     return set(target_bubbles)
 
   def get_safe_neighbors(self, bubble, matches, safe_bubbles):
@@ -459,23 +450,23 @@ class Game:
     """
     neighbors = []
     row, col = bubble.row, bubble.col
-    if not col == 0 and not self.game_table[row][col - 1] is None:
+    if not col == 0 and self.game_table[row][col - 1]:
       neighbors.append(self.game_table[row][col - 1])
-    if not col == MAXWIDTH - 1 and not self.game_table[row][col + 1] is None:
+    if not col == MAXWIDTH - 1 and self.game_table[row][col + 1]:
       neighbors.append(self.game_table[row][col + 1])
-    if not row == 0 and not self.game_table[row - 1][col] is None:
+    if not row == 0 and self.game_table[row - 1][col]:
       neighbors.append(self.game_table[row - 1][col])
-    if row <= MAXHEIGHT and not self.game_table[row + 1][col] is None:
+    if row <= MAXHEIGHT and self.game_table[row + 1][col]:
       neighbors.append(self.game_table[row + 1][col])
     if (row + self.first_row) % 2 == 0:
-      if not row == 0 and not col == 0 and not self.game_table[row - 1][col - 1] is None:
+      if not row == 0 and not col == 0 and self.game_table[row - 1][col - 1]:
         neighbors.append(self.game_table[row - 1][col - 1])
-      if row <= MAXHEIGHT and not col == 0 and not self.game_table[row + 1][col - 1] is None:
+      if row <= MAXHEIGHT and not col == 0 and self.game_table[row + 1][col - 1]:
         neighbors.append(self.game_table[row + 1][col - 1])
     else:
-      if not row == 0 and not col == MAXWIDTH - 1 and not self.game_table[row - 1][col + 1] is None:
+      if not row == 0 and not col == MAXWIDTH - 1 and self.game_table[row - 1][col + 1]:
         neighbors.append(self.game_table[row - 1][col + 1])
-      if row <= MAXHEIGHT and not col == MAXWIDTH - 1 and not self.game_table[row + 1][col + 1] is None:
+      if row <= MAXHEIGHT and not col == MAXWIDTH - 1 and self.game_table[row + 1][col + 1]:
         neighbors.append(self.game_table[row + 1][col + 1])
     return neighbors
 
@@ -485,11 +476,10 @@ class Game:
     :param bubbles: Lista cu bulele care se vor sterge din tabla de joc.
     """
     for bubble in bubbles:
-      print(f"{bubble.row},{bubble.col}: {bubble.color}")
       bubble.destroy(self.game_canvas)
       self.game_table[bubble.row][bubble.col] = None
       color = bubble.color
-      if self.next_bubble_color is not color and not any(bubble.color == color for row in self.game_table for bubble in row if bubble is not None):
+      if self.next_bubble_color is not color and not any(bubble.color == color for row in self.game_table for bubble in row if bubble):
         self.all_colors.remove(bubble.color)
 
   def new_bubble_position(self):
@@ -497,15 +487,14 @@ class Game:
     Calcularea randului si coloanei din tabla de joc a bulei care a fost trase.
     """
     bubble_center_x, bubble_center_y = self.calculate_center(self.current_bubble)
-    if self.collision_bubble is not None:
-      object_center_x, object_center_y = self.calculate_center(self.collision_bubble)
-      row = int(object_center_y / (BUBBLESIZE * 0.85))
-      col = int(object_center_x / BUBBLESIZE)
-      print(f"initial pos: {row}, {col}")
+    if self.collision_bubble:
+      collision_center_x, collision_center_y = self.calculate_center(self.collision_bubble)
+      row = int(collision_center_y / (BUBBLESIZE * 0.85))
+      col = int(collision_center_x / BUBBLESIZE)
       if (self.first_row + row) % 2 == 1:
-        col -= 1 if object_center_x % BUBBLESIZE < BUBBLESIZE / 2 else 0
+        col -= 1 if collision_center_x % BUBBLESIZE < BUBBLESIZE / 2 else 0
       final_row, final_col = row, col
-      if (row + self.first_row) % 2 ==1:
+      if (row + self.first_row) % 2 == 1:
         directions = [(0, 1), (1, 0), (0, -1), (-1, 1), (-1, 0), (1, 1)]
       else:
         directions = [(0, 1), (1, 0), (0, -1), (-1, -1), (-1, 0), (1, -1)]
@@ -514,17 +503,15 @@ class Game:
         new_row, new_col = row + direction[0], col + direction[1]
         if not((self.first_row + new_row) % 2 == 1 and new_col == 11):
           if 0 <= new_row <= MAXHEIGHT and 0 <= new_col < MAXWIDTH and self.game_table[new_row][new_col] is None:
-            new_center_x = (new_col * BUBBLESIZE) + BUBBLESIZE / 2
+            new_center_x = (new_col * BUBBLESIZE) + BUBBLESIZE / 2 + (BUBBLESIZE /2 if (new_row + self.first_row) %  2 == 1 else 0)
             new_center_y = (new_row * BUBBLESIZE * 0.85) + BUBBLESIZE / 2
-            distance_to_collided = math.sqrt((bubble_center_x - new_center_x)**2 + (bubble_center_y - new_center_y)**2)
-            if distance_to_collided < min_distance:
-              min_distance = distance_to_collided
+            distance = math.sqrt((bubble_center_x - new_center_x)**2 + (bubble_center_y - new_center_y)**2)
+            if distance < min_distance:
+              min_distance = distance
               final_row, final_col = new_row, new_col
-              print(f"pos: {final_row}, {final_col}")
     else:
       final_row = self.first_row
       final_col = int(bubble_center_x / BUBBLESIZE)
-    print(f"adjusted pos: {final_row}, {final_col}")
     return final_row, final_col
 
   def update_next_bubbles(self):
@@ -563,5 +550,4 @@ def initial_matrix():
   """
   Initializarea matricii ce reprezinta tabela cu valori None.
   """
-  game_table = [[None for _ in range(MAXWIDTH)] for _ in range(MAXHEIGHT + 2)]
-  return game_table
+  return [[None for _ in range(MAXWIDTH)] for _ in range(MAXHEIGHT + 2)]
